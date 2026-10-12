@@ -1,0 +1,326 @@
+
+--------------------------------------------------------------------------------
+1. Szyfrowanie danych kryptografią symetryczną
+--------------------------------------------------------------------------------
+
+1.1. Szyfrowanie symetryczne pliku algorytmem AES-256:
+Polecenie:
+gpg --symmetric --cipher-algo AES256 GnuPG-instrukcja.pdf
+
+Wynik:
+Utworzono plik: GnuPG-instrukcja.pdf.gpg
+
+
+1.2. Weryfikacja pakietów kryptograficznych:
+Polecenie:
+gpg --list-packets GnuPG-instrukcja.pdf.gpg
+
+Wynik:
+gpg: AES256.CFB encrypted data
+gpg: encrypted with 1 passphrase
+# off=0 ctb=8c tag=3 hlen=2 plen=13
+:symkey enc packet: version 4, cipher 9, aead 0, s2k 3, hash 8
+	salt 0B4285E4C32D2DC8, count 62914560 (254)
+# off=15 ctb=d2 tag=18 hlen=6 plen=424670 new-ctb
+:encrypted data packet:
+	version: 1
+	    mdc: 2
+	 length: 424670
+# off=40 ctb=ae tag=11 hlen=5 plen=424624
+:literal data packet:
+	mode b (62), created 1790954619, name="GnuPG-instrukcja.pdf",
+	raw data: 424598 bytes
+
+Odpowiedź na pytanie:
+Plik został zaszyfrowany algorytmem AES256 w trybie CFB (cipher 9 w pakiecie OpenPGP odpowiada AES256).
+Klucz szyfrujący nie jest tożsamy z wprowadzonym hasłem tekstowym. Z hasła wyprowadzany jest 256-bitowy losowy klucz za pomocą mechanizmu S2K (String-to-Key). GnuPG stosuje wariant Iterated and Salted S2K (s2k 3): do hasła dołączana jest losowa sól (salt: 0B4285E4C32D2DC8), po czym całość jest wielokrotnie haszowana (count: 62914560 iteracji funkcją SHA-256). Spowalnia to drastycznie ewentualny atak słownikowy/brute-force i zabezpiecza przed atakiem z użyciem tęczowych tablic.
+
+
+1.3. Odszyfrowanie i weryfikacja integralności:
+Polecenia:
+gpgconf --kill gpg-agent
+gpg --output odzyskana_instrukcja.pdf --decrypt GnuPG-instrukcja.pdf.gpg
+cmp odzyskana_instrukcja.pdf GnuPG-instrukcja.pdf
+
+Wynik:
+Polecenie cmp nie zwróciło żadnego wyjścia, co oznacza, że odszyfrowany plik jest binarnie identyczny z oryginałem.
+
+
+--------------------------------------------------------------------------------
+2. Obliczanie skrótu wiadomości
+--------------------------------------------------------------------------------
+
+2.1. Przygotowanie pliku:
+Polecenie:
+nano text.txt
+
+
+2.2. Obliczenie skrótu SHA-256:
+Polecenie:
+shasum -a 256 text.txt > skroty.txt
+
+
+2.3. & 2.4. Modyfikacja jednego znaku i ponowne obliczenie skrótu:
+Polecenia:
+nano text.txt
+shasum -a 256 text.txt >> skroty.txt
+
+Zawartość pliku skroty.txt:
+78a13a637c6e9bb3916e2fee132f1548e7d282e31f539567fd404c3e59ccf8a7  text.txt
+ddbbcc05ba067c995923571125f822300777ad71730b48b3f0aa1e243c3b2d25  text.txt
+
+Wniosek:
+Zmiana pojedynczego znaku w pliku spowodowała całkowitą zmianę wygenerowanego skrótu SHA-256. Jest to efekt lawinowy (avalanche effect), kluczowa własność kryptograficznych funkcji skrótu zapewniająca integralność danych.
+
+
+--------------------------------------------------------------------------------
+3. Kryptografia asymetryczna (z kluczem publicznym)
+3.1 Tworzenie kluczy szyfrowania i podpisu cyfrowego
+--------------------------------------------------------------------------------
+
+3.1.1. Dane identyfikacyjne utworzonych kluczy:
+
+Tabela:
++--------------------------+----------------------------------------------------+----------------------------------------------------+
+| Parametr                 | Szyfrowanie i podpis                               | Tylko podpis                                       |
++--------------------------+----------------------------------------------------+----------------------------------------------------+
+| Typ klucza (algorytm)    | RSA (klucz główny [SC], podklucz [E])             | RSA (klucz główny [SC])                            |
+| Imię i nazwisko          | Katarzyna Piskorz                                  | Katarzyna Piskorz                                  |
+| Adres email              | katpiskorz@student.agh.edu.pl                      | katpiskorz@student.agh.edu.pl                      |
+| Komentarz                | Klucz do szyfrowania podpisu                       | Aby łatwo odróżnić oba klucze, blebleble            |
+| Długość klucza / krzywa  | 3072 bity                                          | 3072 bity                                          |
+| Termin ważności          | 90 dni (2027-01-03)                                | 90 dni (2027-01-03)                                |
+| Odcisk palca             | 22F6 12D6 F10B 8F3C 0B87 523C DE23 72B9 5271 C556  | 33FC 10B1 DFC5 8FA0 C71F A68C 9FA6 89A1 505B DB24 |
++--------------------------+----------------------------------------------------+----------------------------------------------------+
+
+Lista kluczy (gpg -k):
+pub   rsa3072 2026-10-05 [SC] [expires: 2027-01-03]
+      33FC10B1DFC58FA0C71FA68C9FA689A1505BDB24
+uid           [ultimate] Katarzyna Piskorz (Aby łatwo odróżnić oba klucze, blebleble) <katpiskorz@student.agh.edu.pl>
+
+pub   rsa3072 2026-10-05 [SC] [expires: 2027-01-03]
+      22F612D6F10B8F3C0B87523CDE2372B95271C556
+uid           [ultimate] Katarzyna Piskorz (Klucz do szyfrowania podpisu) <katpiskorz@student.agh.edu.pl>
+sub   rsa3072 2026-10-05 [E] [expires: 2027-01-03]
+      672CC072BC805D157A6315AACBFFBE647FEA8E17
+
+
+3.1.2. Klucze główne i podklucze w OpenPGP:
+Polecenia:
+gpg -k
+gpg -K
+
+Odpowiedź na pytania:
+1. Dlaczego klucz „szyfrowanie i podpis” składa się z klucza głównego i podklucza?
+- Separacja ról kryptograficznych: klucze do składania podpisów i klucze do deszyfrowania danych mają odmienne cykle życia oraz wymagania dotyczące bezpieczeństwa.
+- Ochrona tożsamości w razie kompromitacji: w przypadku podejrzenia ujawnienia klucza deszyfrującego można unieważnić jedynie podklucz [E], zachowując tożsamość klucza głównego, zgromadzone podpisy zaufania oraz certyfikacje.
+- Izolacja operacyjna: klucz główny [SC] można przechowywać offline (np. w bezpiecznym sejfie/nośniku odłączonym od sieci), a w codziennym systemie roboczym pozostawić wyłącznie podklucze.
+
+2. Dlaczego GnuPG nie pozwala utworzyć klucza głównego „tylko do szyfrowania”?
+- W standardzie OpenPGP tożsamość użytkownika (User ID) oraz podklucze muszą zostać kryptograficznie poświadczone i powiązane podpisem klucza głównego (flaga Certify [C]).
+- Klucz dedykowany wyłącznie do operacji szyfrowania nie potrafi generować podpisów cyfrowych, przez co nie mógłby scertyfikować własnego identyfikatora UID ani powiązać żadnych podkluczy.
+
+
+3.1.3. Certyfikat unieważnienia (revocation certificate):
+Lokalizacja plików:
+~/gnupg-lab/openpgp-revocs.d/22F612D6F10B8F3C0B87523CDE2372B95271C556.rev
+~/gnupg-lab/openpgp-revocs.d/33FC10B1DFC58FA0C71FA68C9FA689A1505BDB24.rev
+
+Odpowiedź:
+Certyfikat unieważnienia służy do trwałego wycofania klucza z użytku w ekosystemie OpenPGP (np. po opublikowaniu na serwerach kluczy) w sytuacji utraty kontroli nad kluczem prywatnym, zapomnienia hasła lub zmiany tożsamości. GnuPG generuje go automatycznie przy tworzeniu klucza, ponieważ po utracie hasła/klucza prywatnego jego wygenerowanie w późniejszym terminie byłoby niemożliwe.
+
+
+--------------------------------------------------------------------------------
+3.2 Wymiana kluczy publicznych
+--------------------------------------------------------------------------------
+
+3.2.1. Eksport klucza publicznego do postaci tekstowej (ASCII Armor):
+Polecenie:
+gpg --armor --output klucz_publiczny.asc --export katpiskorz@student.agh.edu.pl
+
+Porównanie formatu ASCII Armor z formatem PEM:
+- Podobieństwa:
+  Oba formaty służą do kodowania binarnych struktur kryptograficznych do bezpiecznego formatu tekstowego ASCII przy użyciu kodowania Base64. Oba stosują linie otaczające w formacie: "-----BEGIN ...-----" oraz "-----END ...-----".
+- Różnice:
+  1. Suma kontrolna: ASCII Armor (OpenPGP, RFC 4880/9580) obowiązkowo zawiera na końcu bloku Base64 24-bitową sumę kontrolną CRC poprzedzoną znakiem '=' (np. =haac). Format PEM (RFC 7468) nie zawiera sumy kontrolnej na końcu bloku.
+  2. Typ danych: Pod warstwą Base64 w ASCII Armor znajdują się binarne pakiety OpenPGP. W formacie PEM przesyłane są struktury ASN.1 zakodowane binarnie w formacie DER (standard powszechny w certyfikatach X.509 i PKI).
+  3. Nagłówki: ASCII Armor pozwala na umieszczanie metadanych w nagłówku (np. Version, Comment). W PEM nagłówek ogranicza się głównie do wskazania typu obiektu w linii BEGIN (np. BEGIN CERTIFICATE, BEGIN PUBLIC KEY).
+
+
+3.2.2. Import klucza drugiego użytkownika:
+Polecenie:
+gpg --import klucz_kolegi.asc
+
+Wynik:
+gpg: key CBD1E0785DD67DFB: public key "Kokos <kokos@student.agh.edu.pl>" imported
+
+
+3.2.3. Stan pól trust i validity po zaimportowaniu klucza:
+Polecenie:
+gpg --edit-key "Kokos"
+
+Stan pól:
+trust: unknown
+validity: unknown
+[ unknown] (1). Kokos <kokos@student.agh.edu.pl>
+
+
+3.2.4. Weryfikacja autentyczności klucza:
+Polecenie:
+gpg --fingerprint "Kokos"
+
+Wynik:
+pub   rsa3072 2026-10-05 [SCE] [expires: 2027-01-03]
+      6838 C51D 8B09 FE0A 972D  01C7 CBD1 E078 5DD6 7DFB
+uid           [ unknown] Kokos <kokos@student.agh.edu.pl>
+
+Odpowiedzi:
+- Jak zweryfikować autentyczność niezależnym kanałem?
+  Weryfikację wykonuje się kontaktując się z właścicielem klucza innym kanałem niż ten, którym pobrano klucz (np. osobiście, telefonicznie lub podczas tzw. key-signing party) i porównując znak po znaku pełny ciąg odcisku palca (fingerprint) wyliczony lokalnie z odciskiem potwierdzonym przez rozmówcę.
+- Dlaczego samo przesłanie klucza (np. mailem) nie wystarcza?
+  Zwykły e-mail może zostać przechwycony i zmodyfikowany przez atakującego w ataku typu Man-in-the-Middle (MitM). Osoba trzecia może podmienić przesyłany klucz publiczny na swój własny klucz o takich samych danych tożsamości (UID), przejmując możliwość podsłuchu i fałszowania wiadomości.
+
+
+3.2.5. Podpisanie klucza:
+Polecenia:
+gpg --edit-key 22F612D6F10B8F3C0B87523CDE2372B95271C556   # trust -> 5 (ultimate)
+gpg --default-key 22F612D6F10B8F3C0B87523CDE2372B95271C556 --sign-key "Kokos"
+
+
+3.2.6. Ponowne sprawdzenie stanu pól trust i validity:
+Polecenie:
+gpg --edit-key "Kokos"
+
+Stan pól:
+trust: undefined (unknown)
+validity: full
+[  full  ] (1). Kokos <kokos@student.agh.edu.pl>
+
+Odpowiedź na pytania:
+- Które pole się zmieniło:
+  Zmieniło się pole 'validity' – przeszło ze stanu 'unknown' do 'full'.
+  Dlaczego: Złożenie podpisu cyfrowego naszym zaufanym kluczowym kluczem potwierdziło programowi, że klucz publiczny rzeczywiście należy do osoby wskazanej w UID.
+- Które pole się nie zmieniło:
+  Pole 'trust' (ownertrust) pozostało 'undefined'/'unknown'.
+  Dlaczego: Wartość trust określa, na ile ufamy właścicielowi tego klucza w kwestii certyfikowania i sprawdzania kluczy innych osób w ramach sieci zaufania (Web of Trust). Poświadczenie tożsamości Kokosa nie oznacza automatycznego uznania go za rzetelnego audytora innych tożsamości.
+
+--------------------------------------------------------------------------------
+3.3 Szyfrowanie i podpisywanie plików
+--------------------------------------------------------------------------------
+
+Identyfikatory użytych kluczy:
+- Klucz podpisujący (własny): DE2372B95271C556 (Katarzyna Piskorz)
+- Klucz odbiorcy: CBD1E0785DD67DFB (Kokos)
+
+Przygotowanie pliku tekstowego:
+echo "czesc kokos, to jest tajna wiadomosc ode mnie-kasi" > wiadomosc.txt
+
+
+CZĘŚĆ: NADAWCA
+
+3.3.1. Szyfrowanie pliku kluczem publicznym odbiorcy:
+Polecenie:
+gpg -e -r CBD1E0785DD67DFB wiadomosc.txt
+
+Wynik:
+Powstał zaszyfrowany plik binarny: wiadomosc.txt.gpg
+
+
+3.3.2. Podpisywanie pliku kluczem prywatnym na trzy sposoby:
+
+a) Podpis dołączony (--sign):
+Polecenie:
+gpg -u DE2372B95271C556 --output wiadomosc_podpisana.gpg --sign wiadomosc.txt
+
+Pytanie: Czy plik podpisany opcją --sign jest zaszyfrowany? Sprawdź.
+Weryfikacja pakietów:
+gpg --list-packets wiadomosc_podpisana.gpg
+
+Wynik polecenia gpg --list-packets:
+:compressed packet: algo=1
+:onepass_sig packet: keyid DE2372B95271C556
+:literal data packet: mode b (62), name="wiadomosc.txt", raw data: 51 bytes
+:signature packet: algo 1, keyid DE2372B95271C556
+
+Weryfikacja odczytu:
+gpg --output rozpakowana_wiadomosc.txt --decrypt wiadomosc_podpisana.gpg
+cat rozpakowana_wiadomosc.txt
+-> "czesc kokos, to jest tajna wiadomosc ode mnie-kasi"
+
+Odpowiedź:
+Plik podpisany opcją --sign NIE jest zaszyfrowany.
+GnuPG stosuje jedynie domyślną kompresję (algo=1) oraz hermetyzację danych do binarnego formatu OpenPGP. Treść pliku znajduje się w jawnym pakiecie ':literal data packet' (a nie ':encrypted data packet'). Każdy użytkownik może bez znajomości jakichkolwiek kluczy prywatnych ani haseł wyodrębnić oryginalną treść wiadomości (np. poleceniem 'gpg --decrypt'). Opcja --sign gwarantuje jedynie integralność oraz autentyczność pochodzenia danych, nie zapewniając ich poufności.
+
+b) Podpis w postaci czystego tekstu (--clearsign):
+Polecenie:
+gpg -u DE2372B95271C556 --output wiadomosc_clearsign.asc --clearsign wiadomosc.txt
+
+Wynik:
+Powstał czytelny plik tekstowy wiadomosc_clearsign.asc zawierający oryginalną treść ograniczoną nagłówkami "-----BEGIN PGP SIGNED MESSAGE-----" oraz dołączony na dole blok "-----BEGIN PGP SIGNATURE-----".
+
+c) Podpis odłączony (--detach-sign):
+Polecenie:
+gpg -u DE2372B95271C556 --armor --output wiadomosc.sig --detach-sign wiadomosc.txt
+
+Wynik:
+Oryginalny plik wiadomosc.txt pozostał w postaci nienaruszonej, a podpis cyfrowy został wygenerowany do osobnego pliku wiadomosc.sig.
+
+
+3.3.3. Jednoczesne szyfrowanie i podpisywanie:
+Polecenie:
+gpg -u DE2372B95271C556 -e -s -r CBD1E0785DD67DFB --output tajne_i_podpisane.gpg wiadomosc.txt
+
+Wynik:
+Plik tajne_i_podpisane.gpg zapewnia jednocześnie poufność (zaszyfrowany dla odbiorcy CBD1E0785DD67DFB) oraz autentyczność i niezaprzeczalność (podpisany kluczem DE2372B95271C556).
+
+
+3.3.4. Przesłanie plików:
+Wytworzone pliki (wiadomosc.txt.gpg, wiadomosc_podpisana.gpg, wiadomosc_clearsign.asc, wiadomosc.sig, tajne_i_podpisane.gpg) zostały udostępnione partnerowi / umieszczone w katalogu roboczym.
+
+
+CZĘŚĆ: ODBIORCA
+
+3.3.5. Odszyfrowanie pliku:
+Polecenie:
+gpg --output odszyfrowana.txt --decrypt wiadomosc.txt.gpg
+(Odszyfrowanie następuje przy użyciu klucza prywatnego odbiorcy).
+
+
+3.3.6. Weryfikacja poprawności podpisów:
+
+a) Weryfikacja podpisu dołączonego:
+Polecenie:
+gpg --verify wiadomosc_podpisana.gpg
+Wynik:
+gpg: Good signature from "Katarzyna Piskorz (Klucz do szyfrowania podpisu) <katpiskorz@student.agh.edu.pl>" [ultimate]
+
+b) Weryfikacja podpisu tekstowego:
+Polecenie:
+gpg --verify wiadomosc_clearsign.asc
+Wynik:
+gpg: Good signature from "Katarzyna Piskorz (Klucz do szyfrowania podpisu) <katpiskorz@student.agh.edu.pl>" [ultimate]
+
+c) Weryfikacja podpisu odłączonego:
+Polecenie:
+gpg --verify wiadomosc.sig wiadomosc.txt
+Wynik:
+gpg: Good signature from "Katarzyna Piskorz (Klucz do szyfrowania podpisu) <katpiskorz@student.agh.edu.pl>" [ultimate]
+
+
+3.3.7. Modyfikacja podpisanego pliku i ponowna weryfikacja:
+Czynności:
+Edycja pliku wiadomosc_clearsign.asc za pomocą edytora nano i zmiana pojedynczego znaku w treści wiadomości.
+
+Ponowna weryfikacja podpisu:
+gpg --verify wiadomosc_clearsign.asc
+
+Wynik:
+gpg: Signature made Mon Oct  5 14:36:58 2026 CEST
+gpg:                using RSA key 22F612D6F10B8F3C0B87523CDE2372B95271C556
+gpg: BAD signature from "Katarzyna Piskorz (Klucz do szyfrowania podpisu) <katpiskorz@student.agh.edu.pl>" [ultimate]
+
+Odpowiedź na pytania:
+- Jak zmienił się komunikat programu?
+  Komunikat programu zmienił się z 'Good signature' na 'BAD signature'.
+- Jaki związek ma to z częścią 2 ćwiczenia?
+  Podpis cyfrowy nie jest matematycznie liczony dla całej treści pliku, lecz dla jego kryptograficznego skrótu (hasza). W części 2 zaobserwowano tzw. efekt lawinowy funkcji skrótu — zmiana nawet jednego znaku powoduje wygenerowanie diametralnie innej sumy kontrolnej. Podczas weryfikacji programu GnuPG wylicza skrót ze zmodyfikowanego pliku i porównuje go ze skrótem odszyfrowanym z podpisu za pomocą klucza publicznego nadawcy. Ponieważ skróty różnią się od siebie, podpis zostaje natychmiast oznaczony jako nieprawidłowy ('BAD signature'), co jednoznacznie wykrywa naruszenie integralności danych.

@@ -1,0 +1,10 @@
+# Systemowe pliki macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Archiwa
+*.zip
+*.tar.gz
+*.rar
